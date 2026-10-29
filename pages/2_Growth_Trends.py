@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from utils.db import fetch_dataframe
+
 st.set_page_config(
     page_title="Growth Trends | Sector Growth",
     page_icon="📈",
@@ -10,104 +12,172 @@ st.set_page_config(
 )
 
 st.title("📈 Growth Trends")
-st.caption("Eksplorasi tren pertumbuhan dari waktu ke waktu")
+st.caption("Tren publikasi artikel berdasarkan bulan.")
 
-st.warning(
-    "Halaman ini menggunakan data dummy untuk mockup UI. "
-    "Angka di bawah bukan data pertumbuhan aktual."
+st.info(
+    "Visualisasi ini menghitung jumlah artikel berdasarkan "
+    "tanggal publikasi. Ini bukan ukuran pertumbuhan ekonomi "
+    "atau bisnis."
 )
 
-# Data ilustrasi untuk menguji tampilan grafik dan filter.
-df = pd.DataFrame(
-    {
-        "Period": [
-            "Q1 2025",
-            "Q2 2025",
-            "Q3 2025",
-            "Q4 2025",
-            "Q1 2026",
-            "Q2 2026",
-            "Q3 2026",
-        ],
-        "Illustrative Index": [
-            100, 104, 109, 115, 118, 123, 128
-        ],
-        "Year": [
-            2025, 2025, 2025, 2025,
-            2026, 2026, 2026
-        ],
-    }
+# Semua query menggunakan nama tabel tetap yang sudah diverifikasi.
+# data_center_news difilter untuk mengecualikan record AI_SUMMARY.
+QUERIES = {
+    "Sector 3": """
+        SELECT
+            date_trunc('month', published_at)::date AS month,
+            COUNT(*)::int AS total_articles
+        FROM public.sector3_articles
+        WHERE published_at IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+    """,
+    "Data Center News": """
+        SELECT
+            date_trunc('month', published_date)::date AS month,
+            COUNT(*)::int AS total_articles
+        FROM public.data_center_news
+        WHERE record_type = 'ARTICLE'
+          AND published_date IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+    """,
+    "AI News": """
+        SELECT
+            date_trunc('month', tanggal)::date AS month,
+            COUNT(*)::int AS total_articles
+        FROM public.tabel_berita_ai
+        WHERE tanggal IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+    """,
+}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_monthly_data(source: str) -> pd.DataFrame:
+    """Ambil agregasi artikel bulanan dari sumber yang dipilih."""
+    query = QUERIES[source]
+    return fetch_dataframe(query)
+
+
+selected_source = st.selectbox(
+    "Pilih sumber data",
+    list(QUERIES.keys()),
 )
 
-# Filter periode
-selected_period = st.selectbox(
-    "Pilih periode analisis",
-    ["Semua periode", "2025", "2026"],
+try:
+    with st.spinner("Mengambil data dari Neon DB..."):
+        df = load_monthly_data(selected_source)
+
+except Exception as exc:
+    st.error(
+        "Data belum berhasil diambil dari Neon DB. "
+        f"Jenis error: {type(exc).__name__}. "
+        "Periksa konfigurasi koneksi dan coba lagi."
+    )
+    st.stop()
+
+if df.empty:
+    st.warning("Belum ada data publikasi untuk sumber ini.")
+    st.stop()
+
+df["month"] = pd.to_datetime(df["month"])
+df["total_articles"] = pd.to_numeric(
+    df["total_articles"],
+    errors="raise",
 )
+df = df.sort_values("month").reset_index(drop=True)
 
-if selected_period == "2025":
-    chart_df = df[df["Year"] == 2025]
-elif selected_period == "2026":
-    chart_df = df[df["Year"] == 2026]
-else:
-    chart_df = df.copy()
+# Ringkasan dihitung dari hasil query aktual.
+total_articles = int(df["total_articles"].sum())
+average_articles = df["total_articles"].mean()
+peak_row = df.loc[df["total_articles"].idxmax()]
 
-# Ringkasan
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("Periode Ditampilkan", len(chart_df))
+    st.metric(
+        "Total Artikel",
+        f"{total_articles:,}",
+    )
 
 with col2:
-    st.metric("Titik Data", len(chart_df))
+    st.metric(
+        "Rata-rata per Bulan",
+        f"{average_articles:,.1f}",
+    )
 
 with col3:
     st.metric(
-        "Indeks Akhir (Dummy)",
-        int(chart_df["Illustrative Index"].iloc[-1]),
+        "Puncak Publikasi",
+        peak_row["month"].strftime("%b %Y"),
+        help=f"{int(peak_row['total_articles']):,} artikel",
     )
 
 st.divider()
 
-# Grafik tren
-st.subheader("Illustrative Growth Trend")
+st.subheader(f"Tren Publikasi — {selected_source}")
 
 fig = px.line(
-    chart_df,
-    x="Period",
-    y="Illustrative Index",
+    df,
+    x="month",
+    y="total_articles",
     markers=True,
-    title="Indeks Ilustratif per Periode",
     labels={
-        "Period": "Periode",
-        "Illustrative Index": "Indeks Ilustratif",
+        "month": "Bulan",
+        "total_articles": "Jumlah Artikel",
     },
+    title="Jumlah Artikel per Bulan",
 )
 
-fig.update_traces(line=dict(width=3), marker=dict(size=8))
+fig.update_traces(
+    line=dict(width=3),
+    marker=dict(size=8),
+)
+
+fig.update_layout(
+    xaxis=dict(
+        tickformat="%b %Y",
+        title="Bulan publikasi",
+    ),
+    yaxis=dict(
+        rangemode="tozero",
+        title="Jumlah artikel",
+    ),
+    hovermode="x unified",
+)
 
 st.plotly_chart(fig, width="stretch")
 
 st.caption(
-    "Seluruh nilai indeks merupakan data dummy untuk pengembangan UI."
+    "Bulan terakhir pada data bisa belum lengkap. "
+    "Jumlah publikasi juga dapat berubah ketika pipeline "
+    "memasukkan atau memperbarui artikel."
 )
 
 st.divider()
 
-# Tabel pendukung
-st.subheader("Data Periode")
+st.subheader("Data Bulanan")
+
+display_df = df.copy()
+display_df["month"] = display_df["month"].dt.strftime("%Y-%m")
+display_df = display_df.rename(
+    columns={
+        "month": "Bulan",
+        "total_articles": "Jumlah Artikel",
+    }
+)
 
 st.dataframe(
-    chart_df.drop(columns=["Year"]),
+    display_df,
     hide_index=True,
     width="stretch",
 )
 
 st.download_button(
-    label="Unduh data mockup CSV",
-    data=chart_df.drop(columns=["Year"]).to_csv(
-        index=False
-    ).encode("utf-8"),
-    file_name="growth_trends_mockup.csv",
+    label="Unduh Data Bulanan CSV",
+    data=display_df.to_csv(index=False).encode("utf-8"),
+    file_name="growth_trends_monthly.csv",
     mime="text/csv",
 )

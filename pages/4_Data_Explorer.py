@@ -1,5 +1,10 @@
+
+from datetime import date, timedelta
+
 import pandas as pd
 import streamlit as st
+
+from utils.db import fetch_dataframe
 
 st.set_page_config(
     page_title="Data Explorer | Sector Growth",
@@ -8,213 +13,294 @@ st.set_page_config(
 )
 
 st.title("🗂️ Data Explorer")
-st.caption("Eksplorasi dan penyaringan data pertumbuhan sektor")
+st.caption("Pencarian dan eksplorasi artikel dari Neon DB.")
 
-st.warning(
-    "Data pada halaman ini adalah data dummy untuk mockup UI. "
-    "Belum ada data yang dibaca dari Neon DB."
+st.info(
+    "Data diambil langsung dari database. "
+    "Jumlah artikel antar-tabel belum dideduplikasi, "
+    "sehingga hasilnya bukan jumlah berita unik lintas sumber."
 )
 
 # --------------------------------------------------
-# DATA DUMMY
-# Ganti dengan query database setelah skema backend dikonfirmasi.
+# QUERY DEFINITIONS
+# SQL di bawah ditetapkan oleh aplikasi. Input pengguna
+# dimasukkan melalui parameter SQLAlchemy, bukan ke SQL mentah.
 # --------------------------------------------------
-df = pd.DataFrame(
-    [
-        {
-            "Record ID": "MOCK-001",
-            "Period": "2025-Q1",
-            "Sector": "Sector A",
-            "Indicator": "Growth",
-            "Value": 8.5,
-            "Unit": "%",
-            "Source": "Mock Source A",
-        },
-        {
-            "Record ID": "MOCK-002",
-            "Period": "2025-Q1",
-            "Sector": "Sector B",
-            "Indicator": "Growth",
-            "Value": 5.2,
-            "Unit": "%",
-            "Source": "Mock Source B",
-        },
-        {
-            "Record ID": "MOCK-003",
-            "Period": "2025-Q2",
-            "Sector": "Sector C",
-            "Indicator": "Growth",
-            "Value": 3.7,
-            "Unit": "%",
-            "Source": "Mock Source A",
-        },
-        {
-            "Record ID": "MOCK-004",
-            "Period": "2025-Q2",
-            "Sector": "Sector A",
-            "Indicator": "Records",
-            "Value": 120,
-            "Unit": "records",
-            "Source": "Mock Source C",
-        },
-        {
-            "Record ID": "MOCK-005",
-            "Period": "2026-Q1",
-            "Sector": "Sector D",
-            "Indicator": "Growth",
-            "Value": -1.1,
-            "Unit": "%",
-            "Source": "Mock Source B",
-        },
-        {
-            "Record ID": "MOCK-006",
-            "Period": "2026-Q1",
-            "Sector": "Sector E",
-            "Indicator": "Growth",
-            "Value": 6.4,
-            "Unit": "%",
-            "Source": "Mock Source A",
-        },
-        {
-            "Record ID": "MOCK-007",
-            "Period": "2026-Q2",
-            "Sector": "Sector B",
-            "Indicator": "Records",
-            "Value": 95,
-            "Unit": "records",
-            "Source": "Mock Source C",
-        },
-        {
-            "Record ID": "MOCK-008",
-            "Period": "2026-Q2",
-            "Sector": "Sector E",
-            "Indicator": "Growth",
-            "Value": 7.2,
-            "Unit": "%",
-            "Source": "Mock Source B",
-        },
-    ]
-)
 
-# --------------------------------------------------
-# FILTERS
-# --------------------------------------------------
-st.subheader("Filter Data")
+SOURCE_SPECS = {
+    "Sector 3": {
+        "select_sql": """
+            published_at::date AS "Tanggal",
+            title AS "Judul",
+            source AS "Sumber",
+            COALESCE(topic, '(NULL)') AS "Kategori",
+            COALESCE(subtopic, '(NULL)') AS "Subkategori / Teknologi",
+            COALESCE(content_status, '(NULL)') AS "Status / Skor",
+            url AS "URL"
+        """,
+        "from_sql": "public.sector3_articles",
+        "date_column": "published_at",
+        "search_expression": """
+            concat_ws(
+                ' ',
+                title,
+                source,
+                topic,
+                subtopic,
+                industry,
+                technology,
+                business_action,
+                impact,
+                insight_summary
+            )
+        """,
+        "fixed_conditions": [],
+    },
+    "Data Center News": {
+        "select_sql": """
+            published_date AS "Tanggal",
+            title AS "Judul",
+            source AS "Sumber",
+            COALESCE(sector, '(NULL)') AS "Kategori",
+            COALESCE(topic, '(NULL)') AS "Subkategori / Teknologi",
+            COALESCE(relevance, '(NULL)') AS "Status / Skor",
+            article_url AS "URL"
+        """,
+        "from_sql": "public.data_center_news",
+        "date_column": "published_date",
+        "search_expression": """
+            concat_ws(
+                ' ',
+                title,
+                source,
+                sector,
+                topic,
+                technology,
+                company,
+                organization,
+                summary
+            )
+        """,
+        "fixed_conditions": ["record_type = 'ARTICLE'"],
+    },
+    "AI News": {
+        "select_sql": """
+            tanggal AS "Tanggal",
+            judul AS "Judul",
+            sumber AS "Sumber",
+            COALESCE(kategori_bisnis, '(NULL)') AS "Kategori",
+            COALESCE(
+                array_to_string(teknologi_dibahas, ', '),
+                '(NULL)'
+            ) AS "Subkategori / Teknologi",
+            COALESCE(skor_relevansi_it::text, '(NULL)') AS "Status / Skor",
+            link AS "URL"
+        """,
+        "from_sql": "public.tabel_berita_ai",
+        "date_column": "tanggal",
+        "search_expression": """
+            concat_ws(
+                ' ',
+                judul,
+                sumber,
+                kategori_bisnis,
+                array_to_string(teknologi_dibahas, ', '),
+                kategori_lisensi,
+                ringkasan_ai
+            )
+        """,
+        "fixed_conditions": [],
+    },
+}
 
-col1, col2 = st.columns(2)
 
-with col1:
-    sector_options = ["Semua sektor"] + sorted(
-        df["Sector"].unique().tolist()
-    )
+@st.cache_data(ttl=300, show_spinner=False)
+def load_records(
+    source: str,
+    search_term: str,
+    start_date: date | None,
+    end_date: date | None,
+    limit: int,
+) -> pd.DataFrame:
+    """Ambil artikel dari sumber yang dipilih dengan filter aman."""
 
-    selected_sector = st.selectbox(
-        "Pilih sektor",
-        sector_options,
-    )
+    spec = SOURCE_SPECS[source]
 
-with col2:
-    period_options = ["Semua periode"] + sorted(
-        df["Period"].unique().tolist()
-    )
+    conditions = list(spec["fixed_conditions"])
+    params = {"limit": limit}
 
-    selected_period = st.selectbox(
-        "Pilih periode",
-        period_options,
-    )
-
-search_text = st.text_input(
-    "Cari data",
-    placeholder="Cari Record ID, sektor, indikator, atau sumber...",
-)
-
-# Terapkan filter
-filtered_df = df.copy()
-
-if selected_sector != "Semua sektor":
-    filtered_df = filtered_df[
-        filtered_df["Sector"] == selected_sector
-    ]
-
-if selected_period != "Semua periode":
-    filtered_df = filtered_df[
-        filtered_df["Period"] == selected_period
-    ]
-
-if search_text.strip():
-    search_mask = filtered_df.apply(
-        lambda column: column.astype(str).str.contains(
-            search_text.strip(),
-            case=False,
-            na=False,
-            regex=False,
+    if start_date is not None and end_date is not None:
+        conditions.append(
+            f"{spec['date_column']}::date "
+            "BETWEEN :start_date AND :end_date"
         )
-    ).any(axis=1)
+        params["start_date"] = start_date
+        params["end_date"] = end_date
 
-    filtered_df = filtered_df[search_mask]
+    if search_term.strip():
+        conditions.append(
+            f"{spec['search_expression']} ILIKE :search_pattern"
+        )
+        params["search_pattern"] = f"%{search_term.strip()}%"
 
-st.divider()
+    where_clause = (
+        " AND ".join(conditions)
+        if conditions
+        else "TRUE"
+    )
+
+    query = f"""
+        SELECT {spec['select_sql']}
+        FROM {spec['from_sql']}
+        WHERE {where_clause}
+        ORDER BY {spec['date_column']} DESC NULLS LAST
+        LIMIT :limit
+    """
+
+    return fetch_dataframe(query, params=params)
+
+
+# --------------------------------------------------
+# FILTER CONTROLS
+# --------------------------------------------------
+
+source = st.selectbox(
+    "Pilih sumber data",
+    list(SOURCE_SPECS.keys()),
+)
+
+search_term = st.text_input(
+    "Cari artikel",
+    placeholder="Masukkan judul, sumber, kategori, teknologi, atau kata kunci...",
+)
+
+limit = st.selectbox(
+    "Maksimum record yang ditampilkan",
+    options=[100, 250, 500, 1000],
+    index=1,
+)
+
+use_date_filter = st.checkbox(
+    "Batasi rentang tanggal",
+    value=False,
+)
+
+start_date = None
+end_date = None
+
+if use_date_filter:
+    today = date.today()
+    default_start = today - timedelta(days=180)
+
+    date_range = st.date_input(
+        "Rentang tanggal publikasi",
+        value=(default_start, today),
+        max_value=today,
+    )
+
+    if not isinstance(date_range, (tuple, list)) or len(date_range) != 2:
+        st.warning(
+            "Pilih tanggal mulai dan tanggal akhir "
+            "untuk menerapkan filter."
+        )
+        st.stop()
+
+    start_date, end_date = date_range
+
+    if start_date > end_date:
+        st.error("Tanggal mulai tidak boleh melewati tanggal akhir.")
+        st.stop()
+
+
+# --------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------
+
+try:
+    with st.spinner("Mengambil artikel dari Neon DB..."):
+        df = load_records(
+            source=source,
+            search_term=search_term,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
+
+except Exception as exc:
+    st.error(
+        "Data Explorer gagal mengambil data. "
+        "Periksa koneksi database dan struktur tabel."
+    )
+    st.caption(f"Jenis error: {type(exc).__name__}")
+    st.stop()
+
 
 # --------------------------------------------------
 # SUMMARY
 # --------------------------------------------------
-st.subheader("Data Summary")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric(
-        "Filtered Records",
-        len(filtered_df),
-    )
+    st.metric("Record Ditampilkan", f"{len(df):,}")
 
 with col2:
-    st.metric(
-        "Sectors Found",
-        filtered_df["Sector"].nunique(),
+    sector_count = (
+        int(df["Kategori"].nunique())
+        if not df.empty
+        else 0
     )
+    st.metric("Kategori Ditemukan", f"{sector_count:,}")
 
 with col3:
-    st.metric(
-        "Periods Found",
-        filtered_df["Period"].nunique(),
+    source_count = (
+        int(df["Sumber"].nunique())
+        if not df.empty
+        else 0
     )
+    st.metric("Sumber Berita", f"{source_count:,}")
+
+st.caption(
+    f"Sumber aktif: {source}. "
+    f"Batas tampilan: {limit:,} record."
+)
 
 st.divider()
 
-# --------------------------------------------------
-# TABLE
-# --------------------------------------------------
-st.subheader("Records Table")
 
-if filtered_df.empty:
-    st.info(
-        "Tidak ada data yang cocok dengan filter. "
-        "Coba ubah pilihan sektor, periode, atau kata kunci."
+# --------------------------------------------------
+# DATA TABLE
+# --------------------------------------------------
+
+st.subheader("Daftar Artikel")
+
+if df.empty:
+    st.warning(
+        "Tidak ada artikel yang sesuai dengan filter. "
+        "Coba ubah kata kunci atau rentang tanggal."
     )
+
 else:
     st.dataframe(
-        filtered_df,
+        df,
         hide_index=True,
         width="stretch",
         column_config={
-            "Value": st.column_config.NumberColumn(
-                "Value",
-                format="%.2f",
+            "URL": st.column_config.LinkColumn(
+                "Artikel",
+                display_text="Buka artikel",
             ),
         },
     )
 
     st.download_button(
-        label="Unduh hasil filter CSV",
-        data=filtered_df.to_csv(
-            index=False
-        ).encode("utf-8"),
-        file_name="sector_growth_filtered_mockup.csv",
+        label="Unduh hasil sebagai CSV",
+        data=df.to_csv(index=False).encode("utf-8"),
+        file_name="sector_growth_articles.csv",
         mime="text/csv",
     )
 
 st.caption(
-    "Seluruh record dengan ID MOCK adalah data ilustrasi, "
-    "bukan data produksi."
+    "Hasil dibatasi sesuai jumlah record yang dipilih. "
+    "Data diambil menggunakan query baca saja."
 )
