@@ -138,4 +138,126 @@ col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
 with col_btn2: 
     if st.button("🤖 Generate Laporan Eksekutif AI (14 Hari Terakhir)", use_container_width=True, type="primary"):
         if df_ai.empty: 
-            st.warning("Tidak ada data AI News dalam 14 hari terakhir di
+            st.warning("Tidak ada data AI News dalam 14 hari terakhir di database.")
+        else: 
+            popup_laporan_ai(df_ai)
+
+st.divider()
+
+# Pastikan jumlah artikel diperlakukan sebagai bilangan bulat.
+df["article_count"] = pd.to_numeric(
+    df["article_count"],
+    errors="raise",
+).astype(int)
+
+summary = df.set_index("source")
+
+sector3_count = int(summary.loc["Sector 3", "article_count"]) if "Sector 3" in summary.index else 0
+data_center_count = int(summary.loc["Data Center News", "article_count"]) if "Data Center News" in summary.index else 0
+ai_news_count = int(summary.loc["AI News", "article_count"]) if "AI News" in summary.index else 0
+
+
+# --------------------------------------------------
+# KPI
+# --------------------------------------------------
+
+st.subheader("Key Performance Indicators")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "Artikel Sector 3",
+        f"{sector3_count:,}",
+    )
+
+with col2:
+    st.metric(
+        "Artikel Data Center",
+        f"{data_center_count:,}",
+    )
+
+with col3:
+    st.metric(
+        "Artikel AI News",
+        f"{ai_news_count:,}",
+    )
+
+
+st.divider()
+
+# --------------------------------------------------
+# PERBANDINGAN JUMLAH ARTIKEL PER SUMBER
+# --------------------------------------------------
+
+st.subheader("Jumlah Artikel per Sumber")
+
+fig = px.bar(
+    df,
+    x="source",
+    y="article_count",
+    text="article_count",
+    labels={
+        "source": "Sumber Data",
+        "article_count": "Jumlah Artikel",
+    },
+    title="Jumlah Record Artikel pada Setiap Tabel",
+)
+
+fig.update_traces(
+    textposition="outside",
+)
+
+fig.update_layout(
+    xaxis_title="Sumber Data",
+    yaxis_title="Jumlah Artikel",
+    yaxis_rangemode="tozero",
+)
+
+st.plotly_chart(
+    fig,
+    width="stretch",
+)
+
+st.caption(
+    "Perbandingan ini menunjukkan jumlah artikel per tabel. "
+    "Artikel yang sama mungkin tercatat di lebih dari satu sumber."
+)
+
+st.divider()
+
+# --------------------------------------------------
+# TANGGAL PUBLIKASI TERBARU
+# --------------------------------------------------
+
+st.subheader("Ringkasan Sumber Data")
+
+display_df = df.copy()
+
+display_df["latest_publication"] = (
+    pd.to_datetime(
+        display_df["latest_publication"],
+        errors="coerce",
+    )
+    .dt.strftime("%Y-%m-%d")
+    .fillna("Belum tersedia")
+)
+
+display_df = display_df.rename(
+    columns={
+        "source": "Sumber",
+        "article_count": "Jumlah Artikel",
+        "latest_publication": "Publikasi Terbaru",
+    }
+)
+
+st.dataframe(
+    display_df,
+    hide_index=True,
+    width="stretch",
+)
+
+st.caption(
+    "Ringkasan dimuat dari Neon DB dan diperbarui melalui cache "
+    "setiap lima menit."
+)
