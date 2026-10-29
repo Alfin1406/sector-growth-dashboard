@@ -2,55 +2,25 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 import google.generativeai as genai
-
 from utils.db import fetch_dataframe
 
-# Mengambil API Key dari secrets Streamlit
+st.set_page_config(page_title="Overview | Sector Growth", page_icon="📊", layout="wide")
+st.title("📊 Overview & Laporan Eksekutif AI")
+
 api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-st.set_page_config(
-    page_title="Overview | Sector Growth",
-    page_icon="📊",
-    layout="wide",
-)
-
-st.title("📊 Overview & Eksekutif Laporan")
-st.caption("Ringkasan publikasi berita dari database tim dan analisis AI.")
-
-st.info(
-    "KPI dan grafik di bawah menggunakan data aktual dari Neon DB. "
-    "Jumlah artikel antar-tabel belum dideduplikasi, sehingga "
-    "tidak boleh dianggap sebagai jumlah berita unik."
-)
-
+# Query dimodifikasi untuk mengambil jumlah artikel DAN tanggal publikasi terbaru
 OVERVIEW_QUERY = """
     SELECT
         source,
         article_count,
         latest_publication
     FROM (
-        SELECT
-            'Sector 3'::text AS source,
-            COUNT(*)::bigint AS article_count,
-            MAX(published_at)::date AS latest_publication
-        FROM public.sector3_articles
-
+        SELECT 'Sector 3'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_at)::date AS latest_publication FROM public.sector3_articles
         UNION ALL
-
-        SELECT
-            'Data Center News'::text AS source,
-            COUNT(*)::bigint AS article_count,
-            MAX(published_date)::date AS latest_publication
-        FROM public.data_center_news
-        WHERE record_type = 'ARTICLE'
-
+        SELECT 'Data Center News'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_date)::date AS latest_publication FROM public.data_center_news WHERE record_type = 'ARTICLE'
         UNION ALL
-
-        SELECT
-            'AI News'::text AS source,
-            COUNT(*)::bigint AS article_count,
-            MAX(tanggal)::date AS latest_publication
-        FROM public.tabel_berita_ai
+        SELECT 'AI News'::text AS source, COUNT(*)::bigint AS article_count, MAX(tanggal)::date AS latest_publication FROM public.tabel_berita_ai
     ) AS source_summary
     ORDER BY CASE source
         WHEN 'Sector 3' THEN 1
@@ -59,141 +29,95 @@ OVERVIEW_QUERY = """
         ELSE 4
     END
 """
-
-# Query khusus untuk bahan Laporan AI (14 hari terakhir)
-AI_NEWS_QUERY = """
-    SELECT judul, ringkasan_ai 
-    FROM public.tabel_berita_ai 
-    WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days'
-    ORDER BY tanggal DESC
-    LIMIT 15
-"""
-
-@st.cache_data(ttl=300, show_spinner=False)
-def load_overview_data() -> pd.DataFrame:
-    """Mengambil ringkasan aktual dari ketiga sumber berita."""
-    return fetch_dataframe(OVERVIEW_QUERY)
-
-@st.cache_data(ttl=600, show_spinner=False)
-def load_ai_news_data() -> pd.DataFrame:
-    """Mengambil data berita AI 14 hari terakhir untuk prompt."""
-    return fetch_dataframe(AI_NEWS_QUERY)
-
-try:
-    with st.spinner("Mengambil ringkasan dari Neon DB..."):
-        df = load_overview_data()
-        df_ai = load_ai_news_data()
-
-except Exception as exc:
-    st.error(
-        "Data Overview belum berhasil dimuat. "
-        "Periksa koneksi database dan konfigurasi lokal."
-    )
-    st.caption(f"Jenis error: {type(exc).__name__}")
-    st.stop()
-
-
-# Pastikan hasil query tersedia.
-if df.empty:
-    st.warning("Belum ada ringkasan data dari sumber yang tersedia.")
-    st.stop()
-
-# --------------------------------------------------
-# LOGIKA AI SUMMARY (Buatan Alfin)
-# --------------------------------------------------
-@st.cache_data(show_spinner=False)
-def generate_ai_summary(dataframe):
-    if not api_key:
-        return "⚠️ API Key Gemini belum diatur di secrets.toml. Tambahkan 'GEMINI_API_KEY' ke .streamlit/secrets.toml."
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash') # Updated ke versi model yang stabil
-    
-    teks_berita = "".join([f"- {row['judul']}: {str(row.get('ringkasan_ai', ''))}\n" for index, row in dataframe.iterrows()])
-        
-    prompt = f"""
-    Kamu adalah seorang Analis Bisnis Senior di PLN Icon Plus. 
-    Tugasmu adalah menganalisis kumpulan ringkasan berita teknologi dari 2 minggu terakhir berikut ini dan membuat 'Laporan Eksekutif' singkat.
-    Fokuslah pada tren kecerdasan buatan (AI) dan Infrastruktur Data (seperti Data Center, Cloud).
-    
-    Berita terbaru (14 Hari Terakhir):
-    {teks_berita}
-    
-    Buatlah ringkasan dalam format Markdown dengan 2 poin utama:
-    1. Tren AI & Data Terkini (2 kalimat)
-    2. 2 Rekomendasi Peluang Bisnis untuk PLN Icon Plus berdasarkan tren tersebut (gunakan bullet points).
-    Gunakan bahasa Indonesia yang profesional dan lugas.
-    """
-    try:
-        return model.generate_content(prompt).text
-    except Exception as e:
-        return f"Gagal menghasilkan laporan eksekutif. Error: {e}"
-
-@st.dialog("✨ Laporan Eksekutif AI (Tren 14 Hari Terakhir)")
-def popup_laporan_ai(dataframe):
-    st.info(f"🤖 Menganalisis {len(dataframe)} berita terhangat. Mohon tunggu beberapa detik...")
-    st.write(generate_ai_summary(dataframe))
-
-# === TOMBOL AI GLOBAL (Tampil di atas metrik) ===
-col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
-with col_btn2: 
-    if st.button("🤖 Generate Laporan Eksekutif AI (14 Hari Terakhir)", use_container_width=True, type="primary"):
-        if df_ai.empty: 
-            st.warning("Tidak ada data AI News dalam 14 hari terakhir di database.")
-        else: 
-            popup_laporan_ai(df_ai)
-
-st.divider()
-
-# Pastikan jumlah artikel diperlakukan sebagai bilangan bulat.
-df["article_count"] = pd.to_numeric(
-    df["article_count"],
-    errors="raise",
-).astype(int)
-
-summary = df.set_index("source")
-
-sector3_count = int(summary.loc["Sector 3", "article_count"]) if "Sector 3" in summary.index else 0
-data_center_count = int(summary.loc["Data Center News", "article_count"]) if "Data Center News" in summary.index else 0
-ai_news_count = int(summary.loc["AI News", "article_count"]) if "AI News" in summary.index else 0
-
-
-# --------------------------------------------------
-# KPI
-# --------------------------------------------------
+df_kpi = fetch_dataframe(OVERVIEW_QUERY)
 
 st.subheader("Key Performance Indicators")
-
 col1, col2, col3 = st.columns(3)
+kpi_dict = dict(zip(df_kpi['source'], df_kpi['article_count']))
+col1.metric("Artikel Sector 3", f"{kpi_dict.get('Sector 3', 0):,}")
+col2.metric("Artikel Data Center", f"{kpi_dict.get('Data Center News', 0):,}")
+col3.metric("Artikel AI News", f"{kpi_dict.get('AI News', 0):,}")
 
-with col1:
-    st.metric(
-        "Artikel Sector 3",
-        f"{sector3_count:,}",
-    )
+st.divider()
 
-with col2:
-    st.metric(
-        "Artikel Data Center",
-        f"{data_center_count:,}",
-    )
+# ==========================================
+# 1. FITUR AI SUMMARY DINAMIS
+# ==========================================
+st.subheader("🤖 Laporan Eksekutif AI (14 Hari Terakhir)")
+st.caption("Pilih sektor untuk mendapatkan ringkasan analitik AI dari berita terbaru.")
 
-with col3:
-    st.metric(
-        "Artikel AI News",
-        f"{ai_news_count:,}",
-    )
+opsi_sektor = {
+    "Semua Sektor": """
+        SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days'
+        UNION ALL
+        SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days'
+        UNION ALL
+        SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days'
+        LIMIT 30
+    """,
+    "Sector 3": "SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15",
+    "Data Center News": "SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15",
+    "AI News": "SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
+}
+
+fokus_laporan = st.selectbox("Pilih Fokus Sektor untuk Laporan AI:", list(opsi_sektor.keys()))
+
+@st.dialog("✨ Laporan Eksekutif AI")
+def popup_laporan_ai(dataframe, fokus):
+    # Membuat kunci penyimpanan unik berdasarkan sektor yang dipilih
+    cache_key = f"laporan_ai_{fokus}"
+    
+    # 1. CEK CACHE: Jika laporan untuk sektor ini sudah ada di memori, langsung tampilkan
+    if cache_key in st.session_state:
+        st.info(f"Menampilkan laporan tersimpan dari ranah {fokus}...")
+        st.write(st.session_state[cache_key])
+        st.caption("✅ Menggunakan hasil cache (menghemat token API).")
+        return
+
+    # 2. JIKA BELUM ADA DI CACHE: Panggil API Gemini
+    st.info(f"Menganalisis {len(dataframe)} berita terbaru dari ranah {fokus}...")
+    if not api_key:
+        st.error("API Key Gemini belum diatur di secrets.toml.")
+        return
+    
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-3.5-flash-lite')
+    teks_berita = "".join([f"- {row['judul']}: {str(row.get('ringkasan', ''))}\n" for idx, row in dataframe.iterrows()])
+    
+    prompt = f"""Kamu adalah Analis Bisnis Senior PLN Icon Plus. 
+    Buat Laporan Eksekutif singkat dari ringkasan berita 14 HARI TERAKHIR di sektor: {fokus}.
+    Berita: {teks_berita}
+    Format 2 poin: 1. Tren AI & Data Terkini (2 kalimat) 2. Rekomendasi Peluang Bisnis (bullet points)."""
+    
+    try:
+        # Generate teks dari AI
+        hasil_teks = model.generate_content(prompt).text
+        
+        # Simpan teks hasil generate ke dalam session_state agar bisa dipakai lagi
+        st.session_state[cache_key] = hasil_teks
+        
+        # Tampilkan ke layar
+        st.write(hasil_teks)
+    except Exception as e:
+        st.error(f"Gagal menghasilkan laporan: {e}")
+
+if st.button("🤖 Generate Laporan AI", type="primary"):
+    df_ai = fetch_dataframe(opsi_sektor[fokus_laporan])
+    if df_ai.empty:
+        st.warning("Tidak ada berita dalam 14 hari terakhir untuk sektor ini.")
+    else:
+        popup_laporan_ai(df_ai, fokus_laporan)
 
 
 st.divider()
 
-# --------------------------------------------------
-# PERBANDINGAN JUMLAH ARTIKEL PER SUMBER
-# --------------------------------------------------
-
+# ==========================================
+# 2. GRAFIK & TABEL SUMBER DATA
+# ==========================================
 st.subheader("Jumlah Artikel per Sumber")
 
 fig = px.bar(
-    df,
+    df_kpi,
     x="source",
     y="article_count",
     text="article_count",
@@ -201,44 +125,26 @@ fig = px.bar(
         "source": "Sumber Data",
         "article_count": "Jumlah Artikel",
     },
-    title="Jumlah Record Artikel pada Setiap Tabel",
 )
 
-fig.update_traces(
-    textposition="outside",
-)
-
+fig.update_traces(textposition="outside")
 fig.update_layout(
     xaxis_title="Sumber Data",
     yaxis_title="Jumlah Artikel",
     yaxis_rangemode="tozero",
 )
 
-st.plotly_chart(
-    fig,
-    width="stretch",
-)
+st.plotly_chart(fig, use_container_width=True)
 
-st.caption(
-    "Perbandingan ini menunjukkan jumlah artikel per tabel. "
-    "Artikel yang sama mungkin tercatat di lebih dari satu sumber."
-)
+st.caption("Perbandingan ini menunjukkan jumlah artikel per tabel. Artikel yang sama mungkin tercatat di lebih dari satu sumber.")
 
 st.divider()
 
-# --------------------------------------------------
-# TANGGAL PUBLIKASI TERBARU
-# --------------------------------------------------
-
 st.subheader("Ringkasan Sumber Data")
 
-display_df = df.copy()
-
+display_df = df_kpi.copy()
 display_df["latest_publication"] = (
-    pd.to_datetime(
-        display_df["latest_publication"],
-        errors="coerce",
-    )
+    pd.to_datetime(display_df["latest_publication"], errors="coerce")
     .dt.strftime("%Y-%m-%d")
     .fillna("Belum tersedia")
 )
@@ -251,13 +157,6 @@ display_df = display_df.rename(
     }
 )
 
-st.dataframe(
-    display_df,
-    hide_index=True,
-    width="stretch",
-)
+st.dataframe(display_df, hide_index=True, use_container_width=True)
 
-st.caption(
-    "Ringkasan dimuat dari Neon DB dan diperbarui melalui cache "
-    "setiap lima menit."
-)
+st.caption("Ringkasan dimuat dari Neon DB dan diperbarui melalui cache setiap lima menit.")

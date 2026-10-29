@@ -1,420 +1,138 @@
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-
+import google.generativeai as genai
 from utils.db import fetch_dataframe
 
-# Modul AI Summary milik Alfin.
-try:
-    from fitur_ai_summary import render_fitur_ai_summary
-    MODUL_AI_TERSEDIA = True
-except ImportError:
-    MODUL_AI_TERSEDIA = False
-
-st.set_page_config(
-    page_title="Sector Analysis | Sector Growth",
-    page_icon="📊",
-    layout="wide",
-)
-
+st.set_page_config(page_title="Sector Analysis | Sector Growth", page_icon="📊", layout="wide")
 st.title("📊 Sector Analysis")
-st.caption("Analisis distribusi kategori dari data berita aktual.")
 
-st.info(
-    "Jumlah pada grafik menunjukkan jumlah artikel per kategori, "
-    "bukan tingkat pertumbuhan ekonomi atau bisnis. "
-    "Kategori dan jumlahnya mengikuti sumber data yang dipilih."
-)
+api_key = st.secrets.get("GEMINI_API_KEY", "")
 
-# --------------------------------------------------
-# QUERY DISTRIBUSI KATEGORI
-# --------------------------------------------------
-
+# 1. PETA QUERY SQL KE DATABASE NEON
 QUERIES = {
     "Sector 3": {
-        "Topic": """
-            SELECT
-                COALESCE(topic, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.sector3_articles
-            GROUP BY topic
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Subtopic": """
-            SELECT
-                COALESCE(subtopic, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.sector3_articles
-            GROUP BY subtopic
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Industry": """
-            SELECT
-                COALESCE(industry, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.sector3_articles
-            GROUP BY industry
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Publisher": """
-            SELECT
-                COALESCE(source, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.sector3_articles
-            GROUP BY source
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Content Status": """
-            SELECT
-                COALESCE(content_status, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.sector3_articles
-            GROUP BY content_status
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
+        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles GROUP BY topic ORDER BY total DESC LIMIT :limit",
+        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles GROUP BY subtopic ORDER BY total DESC LIMIT :limit",
+        "Industry": "SELECT COALESCE(industry, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles GROUP BY industry ORDER BY total DESC LIMIT :limit",
+        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles GROUP BY source ORDER BY total DESC LIMIT :limit",
+        "Sunburst Hierarchy (Atha)": "SELECT 'Sector 3' AS main_topic, COALESCE(topic, 'Uncategorized') AS category, COALESCE(subtopic, 'Unknown') AS subcategory, COUNT(*)::int AS total FROM public.sector3_articles GROUP BY topic, subtopic"
     },
-
     "Data Center News": {
-        "Sector": """
-            SELECT
-                COALESCE(sector, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.data_center_news
-            WHERE record_type = 'ARTICLE'
-            GROUP BY sector
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Topic": """
-            SELECT
-                COALESCE(topic, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.data_center_news
-            WHERE record_type = 'ARTICLE'
-            GROUP BY topic
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Publisher": """
-            SELECT
-                COALESCE(source, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.data_center_news
-            WHERE record_type = 'ARTICLE'
-            GROUP BY source
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Relevance": """
-            SELECT
-                COALESCE(relevance, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.data_center_news
-            WHERE record_type = 'ARTICLE'
-            GROUP BY relevance
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
+        "Sector": "SELECT COALESCE(sector, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' GROUP BY sector ORDER BY total DESC LIMIT :limit",
+        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' GROUP BY topic ORDER BY total DESC LIMIT :limit",
+        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' GROUP BY subtopic ORDER BY total DESC LIMIT :limit",
+        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' GROUP BY source ORDER BY total DESC LIMIT :limit",
+        "Relevance": "SELECT COALESCE(relevance, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' GROUP BY relevance ORDER BY total DESC LIMIT :limit",
+        "Company Mentions (Arza)": "SELECT COALESCE(company, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND company IS NOT NULL AND company != '' GROUP BY company ORDER BY total DESC LIMIT :limit"
     },
-
     "AI News": {
-        "Business Category": """
-            SELECT
-                COALESCE(kategori_bisnis, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.tabel_berita_ai
-            GROUP BY kategori_bisnis
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Publisher": """
-            SELECT
-                COALESCE(sumber, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.tabel_berita_ai
-            GROUP BY sumber
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-        "Technology Tag": """
-            SELECT
-                COALESCE(tech.value, '(NULL)') AS category,
-                COUNT(*)::int AS total
-            FROM public.tabel_berita_ai
-            CROSS JOIN LATERAL
-                unnest(teknologi_dibahas) AS tech(value)
-            WHERE teknologi_dibahas IS NOT NULL
-            GROUP BY tech.value
-            ORDER BY total DESC, category
-            LIMIT :limit
-        """,
-    },
+        "Business Category": "SELECT COALESCE(kategori_bisnis, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai GROUP BY kategori_bisnis ORDER BY total DESC LIMIT :limit",
+        "Publisher": "SELECT COALESCE(sumber, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai GROUP BY sumber ORDER BY total DESC LIMIT :limit",
+        "Technology Tag": "SELECT COALESCE(tech.value, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai CROSS JOIN LATERAL unnest(teknologi_dibahas) AS tech(value) WHERE teknologi_dibahas IS NOT NULL GROUP BY tech.value ORDER BY total DESC LIMIT :limit"
+    }
 }
 
+# Peta kolom asli untuk menarik data mentah saat Generate AI
+COLUMN_MAP = {
+    "Sector 3": {"Subtopic": "subtopic"},
+    "Data Center News": {"Subtopic": "subtopic"},
+    "AI News": {"Technology Tag": "teknologi_dibahas"}
+}
 
-# --------------------------------------------------
-# CACHE DATA
-# --------------------------------------------------
-
-@st.cache_data(ttl=300, show_spinner=False)
-def load_category_data(
-    source: str,
-    dimension: str,
-    limit: int,
-) -> pd.DataFrame:
-    """Mengambil jumlah artikel berdasarkan kategori."""
-    query = QUERIES[source][dimension]
-    return fetch_dataframe(query, params={"limit": limit})
-
-
-@st.cache_data(ttl=600, show_spinner=False)
-def load_raw_ai_data_for_summary(
-    dimension: str,
-    limit: int,
-) -> pd.DataFrame:
-    """Mengambil sampel berita AI untuk modul AI Summary Alfin."""
-
-    if dimension == "Technology Tag":
-        query = """
-            SELECT
-                judul,
-                sumber,
-                ringkasan_ai,
-                tech.value AS subtopic
-            FROM public.tabel_berita_ai
-            CROSS JOIN LATERAL
-                unnest(teknologi_dibahas) AS tech(value)
-            WHERE teknologi_dibahas IS NOT NULL
-            LIMIT :limit
-        """
-    elif dimension == "Business Category":
-        query = """
-            SELECT
-                judul,
-                sumber,
-                ringkasan_ai,
-                kategori_bisnis AS subtopic
-            FROM public.tabel_berita_ai
-            LIMIT :limit
-        """
-    else:
-        query = """
-            SELECT
-                judul,
-                sumber,
-                ringkasan_ai,
-                sumber AS subtopic
-            FROM public.tabel_berita_ai
-            LIMIT :limit
-        """
-
-    # Mengambil sampel lebih besar untuk modul AI.
-    return fetch_dataframe(
-        query,
-        params={"limit": limit * 50},
-    )
-
-
-# --------------------------------------------------
-# FILTER
-# --------------------------------------------------
-
-filter_col1, filter_col2 = st.columns(2)
-
-with filter_col1:
-    selected_source = st.selectbox(
-        "Pilih sumber data",
-        list(QUERIES.keys()),
-    )
-
-with filter_col2:
-    selected_dimension = st.selectbox(
-        "Analisis berdasarkan",
-        list(QUERIES[selected_source].keys()),
-    )
-
-top_n = st.selectbox(
-    "Jumlah kategori teratas",
-    options=[10, 15, 20, 30],
-    index=1,
-)
-
-# Inisialisasi agar variabel selalu tersedia.
-df_ai_raw = pd.DataFrame()
-
-# --------------------------------------------------
-# AMBIL DATA
-# --------------------------------------------------
+col1, col2, col3 = st.columns([2, 2, 1])
+with col1: selected_source = st.selectbox("Pilih sumber data", list(QUERIES.keys()))
+with col2: selected_dimension = st.selectbox("Analisis berdasarkan", list(QUERIES[selected_source].keys()))
+with col3: top_n = st.selectbox("Jumlah teratas", [10, 15, 30], index=1)
 
 try:
-    with st.spinner("Mengambil data kategori dari Neon DB..."):
-        df = load_category_data(
-            selected_source,
-            selected_dimension,
-            top_n,
-        )
-
-        if selected_source == "AI News" and MODUL_AI_TERSEDIA:
-            df_ai_raw = load_raw_ai_data_for_summary(
-                selected_dimension,
-                top_n,
-            )
-
+    df = fetch_dataframe(QUERIES[selected_source][selected_dimension], params={"limit": top_n})
 except Exception as exc:
-    st.error(
-        "Kategori belum berhasil dimuat dari Neon DB. "
-        "Periksa koneksi dan konfigurasi query."
-    )
-    st.caption(f"Jenis error: {type(exc).__name__}")
+    st.error(f"Gagal memuat data: {exc}")
     st.stop()
 
 if df.empty:
-    st.warning("Tidak ada kategori yang tersedia untuk pilihan ini.")
+    st.warning("Tidak ada data untuk kombinasi ini.")
     st.stop()
 
-# --------------------------------------------------
-# KPI
-# --------------------------------------------------
-
-df["total"] = pd.to_numeric(
-    df["total"],
-    errors="raise",
-).astype(int)
-
-df = (
-    df.sort_values("total", ascending=False)
-    .reset_index(drop=True)
-)
-
-top_category = df.iloc[0]
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric(
-        "Kategori Ditampilkan",
-        len(df),
-    )
-
-with col2:
-    st.metric(
-        "Kategori Teratas",
-        str(top_category["category"]),
-    )
-
-with col3:
-    st.metric(
-        "Artikel pada Kategori Teratas",
-        f"{int(top_category['total']):,}",
-    )
-
-# --------------------------------------------------
-# GRAFIK DISTRIBUSI
-# --------------------------------------------------
-
 st.divider()
+st.subheader(f"Analisis {selected_dimension} — {selected_source}")
 
-st.subheader(
-    f"Distribusi {selected_dimension} — {selected_source}"
-)
+# --- RENDER VISUALISASI ---
+if selected_dimension == "Sunburst Hierarchy (Atha)":
+    fig = px.sunburst(df, path=["main_topic", "category", "subcategory"], values="total", color="category")
+    fig.update_traces(textinfo="label+percent parent", maxdepth=3)
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    df["total"] = pd.to_numeric(df["total"])
+    chart_df = df.sort_values("total", ascending=True)
+    fig = px.bar(chart_df, x="total", y="category", orientation="h", text="total")
+    fig.update_traces(textposition="outside")
+    fig.update_layout(xaxis_title="Jumlah Artikel", yaxis_title="Kategori")
+    st.plotly_chart(fig, use_container_width=True)
 
-chart_df = df.sort_values(
-    "total",
-    ascending=True,
-)
 
-fig = px.bar(
-    chart_df,
-    x="total",
-    y="category",
-    orientation="h",
-    text="total",
-    labels={
-        "total": "Jumlah Artikel",
-        "category": selected_dimension,
-    },
-    title=f"Jumlah Artikel per {selected_dimension}",
-)
+# --- FITUR AI PER-SUBTOPIC (Hanya aktif untuk Subtopik/Technology Tag) ---
+DIMENSI_AI = ["Subtopic", "Technology Tag"]
 
-fig.update_traces(
-    textposition="outside",
-    cliponaxis=False,
-)
-
-fig.update_layout(
-    xaxis_title="Jumlah Artikel",
-    yaxis_title=selected_dimension,
-    yaxis=dict(
-        categoryorder="array",
-        categoryarray=chart_df["category"].tolist(),
-    ),
-    xaxis_rangemode="tozero",
-)
-
-st.plotly_chart(
-    fig,
-    width="stretch",
-)
-
-# --------------------------------------------------
-# MODUL AI SUMMARY ALFIN
-# --------------------------------------------------
-
-if selected_source == "AI News":
-    if MODUL_AI_TERSEDIA:
-        if not df_ai_raw.empty:
-            st.divider()
-            st.subheader("AI Summary")
-
-            list_topik_terpilih = df["category"].tolist()
-
-            render_fitur_ai_summary(
-                df_ai_raw,
-                list_topik_terpilih,
-            )
-        else:
-            st.info(
-                "Data berita AI untuk AI Summary belum tersedia."
-            )
+if selected_dimension in DIMENSI_AI:
+    st.divider()
+    st.subheader(f"🤖 AI Summary khusus untuk {selected_dimension}")
+    st.caption("Pilih salah satu subtopik dari grafik di atas untuk dibuatkan ringkasan khusus oleh AI.")
+    
+    list_kategori = df['category'].tolist()
+    
+    if not list_kategori:
+        st.warning("Tidak ada subtopik untuk dianalisis.")
     else:
-        st.info(
-            "Modul AI Summary belum tersedia. "
-            "Pastikan file fitur_ai_summary.py ada di lokasi "
-            "yang dapat diimpor oleh aplikasi."
-        )
-
-# --------------------------------------------------
-# DETAIL DISTRIBUSI
-# --------------------------------------------------
-
-st.divider()
-st.subheader("Detail Distribusi")
-
-display_df = df.rename(
-    columns={
-        "category": "Kategori",
-        "total": "Jumlah Artikel",
-    }
-)
-
-st.dataframe(
-    display_df,
-    hide_index=True,
-    width="stretch",
-)
-
-if (
-    selected_source == "AI News"
-    and selected_dimension == "Technology Tag"
-):
-    st.caption(
-        "Satu artikel dapat memiliki beberapa tag teknologi. "
-        "Jumlah per tag menghitung kemunculan tag pada artikel, "
-        "sehingga kategori tidak saling eksklusif."
-    )
+        chosen_category = st.selectbox("Pilih Subtopik:", list_kategori)
+        
+        # MEMBUAT KUNCI CACHE UNIK
+        cache_key = f"ai_summary_{selected_source}_{selected_dimension}_{chosen_category}"
+        
+        if st.button(f"✨ Generate Laporan AI untuk '{chosen_category}'", type="primary"):
+            
+            # CEK CACHE SEBELUM MEMANGGIL API
+            if cache_key in st.session_state:
+                st.info(st.session_state[cache_key])
+                st.caption("✅ Menggunakan hasil cache (menghemat token API).")
+            
+            # JIKA BELUM ADA DI CACHE, PROSES API
+            else:
+                if not api_key:
+                    st.error("API Key Gemini belum diatur di secrets.toml.")
+                else:
+                    with st.spinner(f"Mengambil berita '{chosen_category}' (14 Hari Terakhir) dan menganalisis..."):
+                        nama_kolom = COLUMN_MAP[selected_source][selected_dimension]
+                        
+                        if selected_source == "Sector 3":
+                            q_raw = f"SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE {nama_kolom} = :cat AND published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15"
+                        elif selected_source == "Data Center News":
+                            q_raw = f"SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE {nama_kolom} = :cat AND record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15"
+                        elif selected_dimension == "Technology Tag":
+                            q_raw = "SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE :cat = ANY(teknologi_dibahas) AND tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
+                        
+                        df_raw = fetch_dataframe(q_raw, params={"cat": chosen_category})
+                        
+                        if df_raw.empty:
+                            st.warning(f"Tidak ada berita mentah untuk subtopik '{chosen_category}' dalam 14 hari terakhir.")
+                        else:
+                            genai.configure(api_key=api_key)
+                            model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                            teks_berita = "".join([f"- {row['judul']}: {str(row.get('ringkasan', ''))}\n" for idx, row in df_raw.iterrows()])
+                            
+                            prompt = f"""Kamu adalah Analis Bisnis. Buat ringkasan singkat dari kumpulan berita 14 HARI TERAKHIR berikut yang secara spesifik membahas tentang subtopik '{chosen_category}'.
+                            Berita: {teks_berita}
+                            Format: 1. Ringkasan Utama 2. Insight Menarik (Bullet points)."""
+                            
+                            try:
+                                # Generate hasil teks dari API
+                                hasil_teks = model.generate_content(prompt).text
+                                
+                                # Simpan ke session_state agar tidak panggil API lagi jika di-klik ulang
+                                st.session_state[cache_key] = hasil_teks
+                                
+                                # Tampilkan ke layar
+                                st.info(hasil_teks)
+                            except Exception as e:
+                                st.error(f"Gagal menghasilkan laporan: {e}")
