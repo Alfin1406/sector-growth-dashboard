@@ -1,4 +1,3 @@
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -12,7 +11,7 @@ st.set_page_config(
 )
 
 st.title("📈 Growth Trends")
-st.caption("Tren publikasi artikel berdasarkan bulan.")
+st.caption("Tren publikasi artikel berdasarkan waktu.")
 
 st.info(
     "Visualisasi ini menghitung jumlah artikel berdasarkan "
@@ -21,7 +20,7 @@ st.info(
 )
 
 # Semua query menggunakan nama tabel tetap yang sudah diverifikasi.
-# data_center_news difilter untuk mengecualikan record AI_SUMMARY.
+# Ditambahkan date_trunc('week') untuk AI News sesuai struktur Alfin.
 QUERIES = {
     "Sector 3": """
         SELECT
@@ -42,7 +41,7 @@ QUERIES = {
         GROUP BY 1
         ORDER BY 1
     """,
-    "AI News": """
+    "AI News (Bulanan)": """
         SELECT
             date_trunc('month', tanggal)::date AS month,
             COUNT(*)::int AS total_articles
@@ -51,15 +50,22 @@ QUERIES = {
         GROUP BY 1
         ORDER BY 1
     """,
+    "AI News (Mingguan - Alfin)": """
+        SELECT
+            date_trunc('week', tanggal)::date AS month,
+            COUNT(*)::int AS total_articles
+        FROM public.tabel_berita_ai
+        WHERE tanggal IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+    """
 }
-
 
 @st.cache_data(ttl=300, show_spinner=False)
 def load_monthly_data(source: str) -> pd.DataFrame:
-    """Ambil agregasi artikel bulanan dari sumber yang dipilih."""
+    """Ambil agregasi artikel bulanan/mingguan dari sumber yang dipilih."""
     query = QUERIES[source]
     return fetch_dataframe(query)
-
 
 selected_source = st.selectbox(
     "Pilih sumber data",
@@ -104,14 +110,16 @@ with col1:
 
 with col2:
     st.metric(
-        "Rata-rata per Bulan",
+        "Rata-rata per Periode",
         f"{average_articles:,.1f}",
     )
 
 with col3:
+    # Penyesuaian format tanggal berdasarkan bulanan vs mingguan
+    date_format = "%d %b %Y" if "Mingguan" in selected_source else "%b %Y"
     st.metric(
         "Puncak Publikasi",
-        peak_row["month"].strftime("%b %Y"),
+        peak_row["month"].strftime(date_format),
         help=f"{int(peak_row['total_articles']):,} artikel",
     )
 
@@ -125,10 +133,10 @@ fig = px.line(
     y="total_articles",
     markers=True,
     labels={
-        "month": "Bulan",
+        "month": "Periode",
         "total_articles": "Jumlah Artikel",
     },
-    title="Jumlah Artikel per Bulan",
+    title="Jumlah Artikel per Periode (Bulan/Minggu)",
 )
 
 fig.update_traces(
@@ -138,33 +146,36 @@ fig.update_traces(
 
 fig.update_layout(
     xaxis=dict(
-        tickformat="%b %Y",
-        title="Bulan publikasi",
+        tickformat="%d %b %Y" if "Mingguan" in selected_source else "%b %Y",
+        title="Waktu Publikasi",
+        showgrid=False
     ),
     yaxis=dict(
         rangemode="tozero",
         title="Jumlah artikel",
+        fixedrange=True
     ),
     hovermode="x unified",
+    margin=dict(l=0, r=0, t=30, b=0)
 )
 
-st.plotly_chart(fig, width="stretch")
+st.plotly_chart(fig, use_container_width=True)
 
 st.caption(
-    "Bulan terakhir pada data bisa belum lengkap. "
+    "Periode terakhir pada data bisa belum lengkap. "
     "Jumlah publikasi juga dapat berubah ketika pipeline "
     "memasukkan atau memperbarui artikel."
 )
 
 st.divider()
 
-st.subheader("Data Bulanan")
+st.subheader("Data Tabular")
 
 display_df = df.copy()
-display_df["month"] = display_df["month"].dt.strftime("%Y-%m")
+display_df["month"] = display_df["month"].dt.strftime("%Y-%m-%d" if "Mingguan" in selected_source else "%Y-%m")
 display_df = display_df.rename(
     columns={
-        "month": "Bulan",
+        "month": "Periode",
         "total_articles": "Jumlah Artikel",
     }
 )
@@ -176,8 +187,8 @@ st.dataframe(
 )
 
 st.download_button(
-    label="Unduh Data Bulanan CSV",
+    label="Unduh Data CSV",
     data=display_df.to_csv(index=False).encode("utf-8"),
-    file_name="growth_trends_monthly.csv",
+    file_name="growth_trends_data.csv",
     mime="text/csv",
 )
