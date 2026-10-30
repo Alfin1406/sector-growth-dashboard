@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from utils.db import fetch_dataframe
 
 st.set_page_config(page_title="Overview | Sector Growth", page_icon="📊", layout="wide")
@@ -80,8 +80,8 @@ def popup_laporan_ai(dataframe, fokus):
         st.error("API Key Gemini belum diatur di secrets.toml.")
         return
     
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3.5-flash-lite')
+    # --- PERBAIKAN SDK GOOGLE GENAI DIMULAI DI SINI ---
+    client = genai.Client(api_key=api_key)
     teks_berita = "".join([f"- {row['judul']}: {str(row.get('ringkasan', ''))}\n" for idx, row in dataframe.iterrows()])
     
     prompt = f"""Kamu adalah Analis Bisnis Senior PLN Icon Plus. 
@@ -90,8 +90,12 @@ def popup_laporan_ai(dataframe, fokus):
     Format 2 poin: 1. Tren AI & Data Terkini (2 kalimat) 2. Rekomendasi Peluang Bisnis (bullet points)."""
     
     try:
-        # Generate teks dari AI
-        hasil_teks = model.generate_content(prompt).text
+        # Generate teks dari AI menggunakan format pemanggilan baru
+        response = client.models.generate_content(
+            model='gemini-3.5-flash-lite',
+            contents=prompt
+        )
+        hasil_teks = response.text
         
         # Simpan teks hasil generate ke dalam session_state agar bisa dipakai lagi
         st.session_state[cache_key] = hasil_teks
@@ -100,6 +104,7 @@ def popup_laporan_ai(dataframe, fokus):
         st.write(hasil_teks)
     except Exception as e:
         st.error(f"Gagal menghasilkan laporan: {e}")
+    # --- PERBAIKAN SDK SELESAI ---
 
 if st.button("🤖 Generate Laporan AI", type="primary"):
     df_ai = fetch_dataframe(opsi_sektor[fokus_laporan])

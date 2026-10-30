@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from utils.db import fetch_dataframe
 
 st.set_page_config(page_title="Sector Analysis | Sector Growth", page_icon="📊", layout="wide")
@@ -117,8 +117,8 @@ if selected_dimension in DIMENSI_AI:
                         if df_raw.empty:
                             st.warning(f"Tidak ada berita mentah untuk subtopik '{chosen_category}' dalam 14 hari terakhir.")
                         else:
-                            genai.configure(api_key=api_key)
-                            model = genai.GenerativeModel('gemini-3.5-flash-lite')
+                            # --- PERBAIKAN SDK GOOGLE GENAI DIMULAI DI SINI ---
+                            client = genai.Client(api_key=api_key)
                             teks_berita = "".join([f"- {row['judul']}: {str(row.get('ringkasan', ''))}\n" for idx, row in df_raw.iterrows()])
                             
                             prompt = f"""Kamu adalah Analis Bisnis. Buat ringkasan singkat dari kumpulan berita 14 HARI TERAKHIR berikut yang secara spesifik membahas tentang subtopik '{chosen_category}'.
@@ -126,8 +126,12 @@ if selected_dimension in DIMENSI_AI:
                             Format: 1. Ringkasan Utama 2. Insight Menarik (Bullet points)."""
                             
                             try:
-                                # Generate hasil teks dari API
-                                hasil_teks = model.generate_content(prompt).text
+                                # Generate hasil teks dari API menggunakan format baru
+                                response = client.models.generate_content(
+                                    model='gemini-3.5-flash-lite',
+                                    contents=prompt
+                                )
+                                hasil_teks = response.text
                                 
                                 # Simpan ke session_state agar tidak panggil API lagi jika di-klik ulang
                                 st.session_state[cache_key] = hasil_teks
@@ -136,3 +140,4 @@ if selected_dimension in DIMENSI_AI:
                                 st.info(hasil_teks)
                             except Exception as e:
                                 st.error(f"Gagal menghasilkan laporan: {e}")
+                            # --- PERBAIKAN SDK SELESAI ---
