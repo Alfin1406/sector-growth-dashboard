@@ -7,25 +7,25 @@ st.set_page_config(page_title="Data Explorer | Sector Growth", page_icon="🗂�
 st.markdown("""<style>div[data-testid="column"] button { margin-top: 5px; margin-bottom: 5px; } .pagination-caption { text-align: center; color: #888; font-size: 14px; margin-bottom: 15px; }</style>""", unsafe_allow_html=True)
 st.title("🗂️ Data Explorer")
 
-# --- PERBAIKAN: Kolom 'gambar' dimasukkan ke query AI News ---
+# GANTI NAMA KEY AGAR SESUAI TEMA RESMI
 SOURCE_SPECS = {
-    "Sector 3": {
+    "Digital Transformation & IT Enterprise": {
         "select": """published_at::date AS "Tanggal", title AS "Judul", source AS "Sumber", COALESCE(topic, '(NULL)') AS "Kategori", COALESCE(subtopic, '(NULL)') AS "Subkategori", url AS "URL", NULL AS "Gambar" """,
         "from": "public.sector3_articles", "date": "published_at", "search": "concat_ws(' ', title, source, topic, subtopic)"
     },
-    "Data Center News": {
+    "Data Center & Infrastruktur": {
         "select": """published_date AS "Tanggal", title AS "Judul", source AS "Sumber", COALESCE(sector, '(NULL)') AS "Kategori", COALESCE(company, '(NULL)') AS "Subkategori", article_url AS "URL", image_url AS "Gambar" """,
         "from": "public.data_center_news", "date": "published_date", "search": "concat_ws(' ', title, source, sector, company, summary)",
         "where": "record_type = 'ARTICLE'"
     },
-    "AI News": {
+    "AI & Data": {
         "select": """tanggal AS "Tanggal", judul AS "Judul", sumber AS "Sumber", COALESCE(kategori_bisnis, '(NULL)') AS "Kategori", COALESCE(array_to_string(teknologi_dibahas, ', '), '(NULL)') AS "Subkategori", link AS "URL", gambar AS "Gambar" """,
         "from": "public.tabel_berita_ai", "date": "tanggal", "search": "concat_ws(' ', judul, sumber, kategori_bisnis, ringkasan_ai)"
     }
 }
 
 col1, col2 = st.columns([1, 2])
-with col1: source = st.selectbox("Pilih sumber data", list(SOURCE_SPECS.keys()))
+with col1: source = st.selectbox("Pilih Tema", list(SOURCE_SPECS.keys()))
 with col2: search_term = st.text_input("Cari artikel...", placeholder="Kata kunci...")
 
 spec = SOURCE_SPECS[source]
@@ -71,7 +71,6 @@ else:
             for idx, (_, row) in enumerate(baris.iterrows()):
                 with kolom[idx]:
                     with st.container(border=True):
-                        # Logika render gambar 
                         img_url = str(row["Gambar"])
                         if img_url.startswith("http"): 
                             st.image(img_url, use_container_width=True)
@@ -86,7 +85,6 @@ else:
                         if str(row.get("URL")).startswith("http"):
                             st.link_button("🔗 Baca Artikel ➔", str(row["URL"]), use_container_width=True)
 
-        # Kontrol Navigasi Paginasi
         col_nav_kiri, col_nav_tengah, col_nav_kanan = st.columns([1, 4, 1])
         with col_nav_tengah:
             hal_skrg = st.session_state.hal_explorer

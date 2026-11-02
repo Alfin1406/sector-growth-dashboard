@@ -12,18 +12,24 @@ col_res, col_src, col_opt = st.columns([1, 1, 1.5])
 with col_res: 
     time_resolution = st.radio("Resolusi Waktu", ["Bulanan", "Mingguan"], horizontal=True)
 with col_src: 
-    selected_source = st.selectbox("Pilih sumber data", ["Sector 3", "Data Center & Cloud", "AI News"])
+    # NAMA TEMA DI DROPDOWN DIUBAH
+    selected_source = st.selectbox("Pilih Tema", [
+        "Digital Transformation & IT Enterprise", 
+        "Data Center & Infrastruktur", 
+        "AI & Data"
+    ])
 with col_opt:
-    st.write("") # Spacer agar sejajar
+    st.write("") 
     st.write("")
     exclude_current = st.checkbox("Sembunyikan periode berjalan (belum selesai)", value=False, help="Centang ini agar grafik tidak menukik tajam di akhir periode karena bulan/minggu yang belum genap.")
 
 sql_trunc = "month" if time_resolution == "Bulanan" else "week"
 
+# MAP QUERY UNTUK MENCOCOKKAN LABEL BARU
 queries = {
-    "Sector 3": f"SELECT date_trunc('{sql_trunc}', published_at)::date AS month, COUNT(*)::int AS total_articles FROM public.sector3_articles WHERE published_at IS NOT NULL GROUP BY 1 ORDER BY 1",
-    "Data Center & Cloud": f"SELECT date_trunc('{sql_trunc}', published_date)::date AS month, COUNT(*)::int AS total_articles FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date IS NOT NULL GROUP BY 1 ORDER BY 1",
-    "AI News": f"SELECT date_trunc('{sql_trunc}', tanggal)::date AS month, COUNT(*)::int AS total_articles FROM public.tabel_berita_ai WHERE tanggal IS NOT NULL GROUP BY 1 ORDER BY 1"
+    "Digital Transformation & IT Enterprise": f"SELECT date_trunc('{sql_trunc}', published_at)::date AS month, COUNT(*)::int AS total_articles FROM public.sector3_articles WHERE published_at IS NOT NULL GROUP BY 1 ORDER BY 1",
+    "Data Center & Infrastruktur": f"SELECT date_trunc('{sql_trunc}', published_date)::date AS month, COUNT(*)::int AS total_articles FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date IS NOT NULL GROUP BY 1 ORDER BY 1",
+    "AI & Data": f"SELECT date_trunc('{sql_trunc}', tanggal)::date AS month, COUNT(*)::int AS total_articles FROM public.tabel_berita_ai WHERE tanggal IS NOT NULL GROUP BY 1 ORDER BY 1"
 }
 
 try:
@@ -33,7 +39,7 @@ except Exception as exc:
     st.stop()
 
 if df.empty:
-    st.warning("Belum ada data publikasi untuk sumber ini.")
+    st.warning("Belum ada data publikasi untuk tema ini.")
     st.stop()
 
 # --- PEMROSESAN DATA ---
@@ -41,7 +47,6 @@ df["month"] = pd.to_datetime(df["month"])
 df["total_articles"] = pd.to_numeric(df["total_articles"])
 df = df.sort_values("month").reset_index(drop=True)
 
-# Logika Checkbox: Memotong baris paling terakhir jika dicentang
 if exclude_current and len(df) > 1:
     df = df.iloc[:-1]
 
@@ -81,4 +86,6 @@ with st.expander("Lihat Data Tabular & Unduh", expanded=False):
     st.dataframe(display_df, hide_index=True, use_container_width=True)
     
     csv = display_df.to_csv(index=False).encode('utf-8')
-    st.download_button(label="📥 Unduh Data (CSV)", data=csv, file_name=f"trend_{selected_source.lower().replace(' ', '_')}.csv", mime="text/csv")
+    # Nama file CSV diubah menggunakan sanitasi string sederhana
+    file_name_clean = selected_source.split(' (')[0].replace(' ', '_').replace('&', 'and').lower()
+    st.download_button(label="📥 Unduh Data (CSV)", data=csv, file_name=f"trend_{file_name_clean}.csv", mime="text/csv")
