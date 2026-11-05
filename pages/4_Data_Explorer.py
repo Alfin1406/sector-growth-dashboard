@@ -11,16 +11,16 @@ st.title("🗂️ Data Explorer")
 SOURCE_SPECS = {
     "Digital Transformation & IT Enterprise": {
         "select": """published_at::date AS "Tanggal", title AS "Judul", source AS "Sumber", COALESCE(topic, '(NULL)') AS "Kategori", COALESCE(subtopic, '(NULL)') AS "Subkategori", url AS "URL", NULL AS "Gambar" """,
-        "from": "public.sector3_articles", "date": "published_at", "search": "concat_ws(' ', title, source, topic, subtopic)"
+        "from": "public.atha_sector3_articles", "date": "published_at", "search": "concat_ws(' ', title, source, topic, subtopic)"
     },
     "Data Center & Infrastruktur": {
         "select": """published_date AS "Tanggal", title AS "Judul", source AS "Sumber", COALESCE(sector, '(NULL)') AS "Kategori", COALESCE(company, '(NULL)') AS "Subkategori", article_url AS "URL", image_url AS "Gambar" """,
-        "from": "public.data_center_news", "date": "published_date", "search": "concat_ws(' ', title, source, sector, company, summary)",
+        "from": "public.arza_data_center_news", "date": "published_date", "search": "concat_ws(' ', title, source, sector, company, summary)",
         "where": "record_type = 'ARTICLE'"
     },
     "AI & Data": {
         "select": """tanggal AS "Tanggal", judul AS "Judul", sumber AS "Sumber", COALESCE(kategori_bisnis, '(NULL)') AS "Kategori", COALESCE(array_to_string(teknologi_dibahas, ', '), '(NULL)') AS "Subkategori", link AS "URL", gambar AS "Gambar" """,
-        "from": "public.tabel_berita_ai", "date": "tanggal", "search": "concat_ws(' ', judul, sumber, kategori_bisnis, ringkasan_ai)"
+        "from": "public.alfin_berita_ai", "date": "tanggal", "search": "concat_ws(' ', judul, sumber, kategori_bisnis, ringkasan_ai)"
     }
 }
 

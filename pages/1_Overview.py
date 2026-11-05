@@ -16,11 +16,11 @@ OVERVIEW_QUERY = """
         article_count,
         latest_publication
     FROM (
-        SELECT 'Digital Transformation & IT Enterprise'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_at)::date AS latest_publication FROM public.sector3_articles
+        SELECT 'Digital Transformation & IT Enterprise'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_at)::date AS latest_publication FROM public.atha_sector3_articles
         UNION ALL
-        SELECT 'Data Center & Infrastruktur'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_date)::date AS latest_publication FROM public.data_center_news WHERE record_type = 'ARTICLE'
+        SELECT 'Data Center & Infrastruktur'::text AS source, COUNT(*)::bigint AS article_count, MAX(published_date)::date AS latest_publication FROM public.arza_data_center_news WHERE record_type = 'ARTICLE'
         UNION ALL
-        SELECT 'AI & Data'::text AS source, COUNT(*)::bigint AS article_count, MAX(tanggal)::date AS latest_publication FROM public.tabel_berita_ai
+        SELECT 'AI & Data'::text AS source, COUNT(*)::bigint AS article_count, MAX(tanggal)::date AS latest_publication FROM public.alfin_berita_ai
     ) AS source_summary
     ORDER BY CASE source
         WHEN 'Digital Transformation & IT Enterprise' THEN 1
@@ -50,16 +50,16 @@ st.caption("Pilih sektor untuk mendapatkan ringkasan analitik AI dari berita ter
 # LABEL DROPDOWN DIUBAH
 opsi_sektor = {
     "Semua Tema": """
-        SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days'
+        SELECT title AS judul, insight_summary AS ringkasan FROM public.atha_sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days'
         UNION ALL
-        SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days'
+        SELECT title AS judul, summary AS ringkasan FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days'
         UNION ALL
-        SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days'
+        SELECT judul, ringkasan_ai AS ringkasan FROM public.alfin_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days'
         LIMIT 30
     """,
-    "Digital Transformation & IT Enterprise": "SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15",
-    "Data Center & Infrastruktur": "SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15",
-    "AI & Data": "SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
+    "Digital Transformation & IT Enterprise": "SELECT title AS judul, insight_summary AS ringkasan FROM public.atha_sector3_articles WHERE published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15",
+    "Data Center & Infrastruktur": "SELECT title AS judul, summary AS ringkasan FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15",
+    "AI & Data": "SELECT judul, ringkasan_ai AS ringkasan FROM public.alfin_berita_ai WHERE tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
 }
 
 fokus_laporan = st.selectbox("Pilih Fokus Tema untuk Laporan AI:", list(opsi_sektor.keys()))

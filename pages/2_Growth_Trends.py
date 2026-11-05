@@ -27,9 +27,9 @@ sql_trunc = "month" if time_resolution == "Bulanan" else "week"
 
 # MAP QUERY UNTUK MENCOCOKKAN LABEL BARU
 queries = {
-    "Digital Transformation & IT Enterprise": f"SELECT date_trunc('{sql_trunc}', published_at)::date AS month, COUNT(*)::int AS total_articles FROM public.sector3_articles WHERE published_at IS NOT NULL GROUP BY 1 ORDER BY 1",
-    "Data Center & Infrastruktur": f"SELECT date_trunc('{sql_trunc}', published_date)::date AS month, COUNT(*)::int AS total_articles FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date IS NOT NULL GROUP BY 1 ORDER BY 1",
-    "AI & Data": f"SELECT date_trunc('{sql_trunc}', tanggal)::date AS month, COUNT(*)::int AS total_articles FROM public.tabel_berita_ai WHERE tanggal IS NOT NULL GROUP BY 1 ORDER BY 1"
+    "Digital Transformation & IT Enterprise": f"SELECT date_trunc('{sql_trunc}', published_at)::date AS month, COUNT(*)::int AS total_articles FROM public.atha_sector3_articles WHERE published_at IS NOT NULL GROUP BY 1 ORDER BY 1",
+    "Data Center & Infrastruktur": f"SELECT date_trunc('{sql_trunc}', published_date)::date AS month, COUNT(*)::int AS total_articles FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date IS NOT NULL GROUP BY 1 ORDER BY 1",
+    "AI & Data": f"SELECT date_trunc('{sql_trunc}', tanggal)::date AS month, COUNT(*)::int AS total_articles FROM public.alfin_berita_ai WHERE tanggal IS NOT NULL GROUP BY 1 ORDER BY 1"
 }
 
 try:

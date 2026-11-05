@@ -13,24 +13,24 @@ api_key = st.secrets.get("GEMINI_API_KEY", "")
 # 1. PETA QUERY SQL KE DATABASE NEON DENGAN NAMA TEMA RESMI
 QUERIES = {
     "Digital Transformation & IT Enterprise": {
-        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY topic ORDER BY total DESC",
-        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY subtopic ORDER BY total DESC",
-        "Industry": "SELECT COALESCE(industry, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY industry ORDER BY total DESC",
-        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY source ORDER BY total DESC",
-        "Sunburst Hierarchy": "SELECT 'Digital Transformation & IT Enterprise' AS main_topic, COALESCE(topic, 'Uncategorized') AS category, COALESCE(subtopic, 'Unknown') AS subcategory, COUNT(*)::int AS total FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY topic, subtopic"
+        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY topic ORDER BY total DESC",
+        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY subtopic ORDER BY total DESC",
+        "Industry": "SELECT COALESCE(industry, '(NULL)') AS category, COUNT(*)::int AS total FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY industry ORDER BY total DESC",
+        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY source ORDER BY total DESC",
+        "Sunburst Hierarchy": "SELECT 'Digital Transformation & IT Enterprise' AS main_topic, COALESCE(topic, 'Uncategorized') AS category, COALESCE(subtopic, 'Unknown') AS subcategory, COUNT(*)::int AS total FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date GROUP BY topic, subtopic"
     },
     "Data Center & Cloud": {
-        "Sector": "SELECT COALESCE(sector, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY sector ORDER BY total DESC",
-        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY topic ORDER BY total DESC",
-        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY subtopic ORDER BY total DESC",
-        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY source ORDER BY total DESC",
-        "Relevance": "SELECT COALESCE(relevance, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY relevance ORDER BY total DESC",
-        "Company Mentions": "SELECT COALESCE(company, '(NULL)') AS category, COUNT(*)::int AS total FROM public.data_center_news WHERE record_type = 'ARTICLE' AND company IS NOT NULL AND company != '' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY company ORDER BY total DESC"
+        "Sector": "SELECT COALESCE(sector, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY sector ORDER BY total DESC",
+        "Topic": "SELECT COALESCE(topic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY topic ORDER BY total DESC",
+        "Subtopic": "SELECT COALESCE(subtopic, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY subtopic ORDER BY total DESC",
+        "Publisher": "SELECT COALESCE(source, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY source ORDER BY total DESC",
+        "Relevance": "SELECT COALESCE(relevance, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY relevance ORDER BY total DESC",
+        "Company Mentions": "SELECT COALESCE(company, '(NULL)') AS category, COUNT(*)::int AS total FROM public.arza_data_center_news WHERE record_type = 'ARTICLE' AND company IS NOT NULL AND company != '' AND published_date::date >= :start_date AND published_date::date <= :end_date GROUP BY company ORDER BY total DESC"
     },
     "AI & Data": {
-        "Business Category": "SELECT COALESCE(kategori_bisnis, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY kategori_bisnis ORDER BY total DESC",
-        "Publisher": "SELECT COALESCE(sumber, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY sumber ORDER BY total DESC",
-        "Technology Tag": "SELECT COALESCE(tech.value, '(NULL)') AS category, COUNT(*)::int AS total FROM public.tabel_berita_ai CROSS JOIN LATERAL unnest(teknologi_dibahas) AS tech(value) WHERE teknologi_dibahas IS NOT NULL AND tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY tech.value ORDER BY total DESC"
+        "Business Category": "SELECT COALESCE(kategori_bisnis, '(NULL)') AS category, COUNT(*)::int AS total FROM public.alfin_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY kategori_bisnis ORDER BY total DESC",
+        "Publisher": "SELECT COALESCE(sumber, '(NULL)') AS category, COUNT(*)::int AS total FROM public.alfin_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY sumber ORDER BY total DESC",
+        "Technology Tag": "SELECT COALESCE(tech.value, '(NULL)') AS category, COUNT(*)::int AS total FROM public.alfin_berita_ai CROSS JOIN LATERAL unnest(teknologi_dibahas) AS tech(value) WHERE teknologi_dibahas IS NOT NULL AND tanggal::date >= :start_date AND tanggal::date <= :end_date GROUP BY tech.value ORDER BY total DESC"
     }
 }
 
@@ -116,11 +116,11 @@ if selected_dimension in DIMENSI_AI:
                         nama_kolom = COLUMN_MAP[selected_source][selected_dimension]
                         
                         if selected_source == "Digital Transformation & IT Enterprise":
-                            q_raw = f"SELECT title AS judul, insight_summary AS ringkasan FROM public.sector3_articles WHERE {nama_kolom} = :cat AND published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15"
+                            q_raw = f"SELECT title AS judul, insight_summary AS ringkasan FROM public.atha_sector3_articles WHERE {nama_kolom} = :cat AND published_at >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_at DESC LIMIT 15"
                         elif selected_source == "Data Center & Cloud":
-                            q_raw = f"SELECT title AS judul, summary AS ringkasan FROM public.data_center_news WHERE {nama_kolom} = :cat AND record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15"
+                            q_raw = f"SELECT title AS judul, summary AS ringkasan FROM public.arza_data_center_news WHERE {nama_kolom} = :cat AND record_type = 'ARTICLE' AND published_date >= CURRENT_DATE - INTERVAL '14 days' ORDER BY published_date DESC LIMIT 15"
                         elif selected_dimension == "Technology Tag":
-                            q_raw = "SELECT judul, ringkasan_ai AS ringkasan FROM public.tabel_berita_ai WHERE :cat = ANY(teknologi_dibahas) AND tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
+                            q_raw = "SELECT judul, ringkasan_ai AS ringkasan FROM public.alfin_berita_ai WHERE :cat = ANY(teknologi_dibahas) AND tanggal >= CURRENT_DATE - INTERVAL '14 days' ORDER BY tanggal DESC LIMIT 15"
                         
                         df_raw = fetch_dataframe(q_raw, params={"cat": chosen_category})
                         
@@ -160,7 +160,7 @@ if selected_source == "Data Center & Cloud":
     
     query_arza = """
     SELECT topic, technology, investment_value, capacity, company, project_location, organization 
-    FROM public.data_center_news 
+    FROM public.arza_data_center_news 
     WHERE record_type = 'ARTICLE' 
     AND published_date::date >= :start_date AND published_date::date <= :end_date
     """
@@ -275,7 +275,7 @@ if selected_source == "Data Center & Cloud":
 elif selected_source == "AI & Data":
     st.markdown("### Analitik Lisensi & Distribusi Portal")
     
-    query_alfin = "SELECT sumber, kategori_lisensi, teknologi_dibahas FROM public.tabel_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date"
+    query_alfin = "SELECT sumber, kategori_lisensi, teknologi_dibahas FROM public.alfin_berita_ai WHERE tanggal::date >= :start_date AND tanggal::date <= :end_date"
     try:
         df_alfin = fetch_dataframe(query_alfin, params={"start_date": start_date, "end_date": end_date})
         
@@ -321,7 +321,7 @@ elif selected_source == "AI & Data":
 elif selected_source == "Digital Transformation & IT Enterprise":
     st.markdown("### Jenis peristiwa, sumber, dan konteks bisnis")
     
-    query_atha = "SELECT event_type, industry, technology, source FROM public.sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date"
+    query_atha = "SELECT event_type, industry, technology, source FROM public.atha_sector3_articles WHERE published_at::date >= :start_date AND published_at::date <= :end_date"
     try:
         df_atha = fetch_dataframe(query_atha, params={"start_date": start_date, "end_date": end_date})
         
