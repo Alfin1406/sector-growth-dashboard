@@ -35,7 +35,7 @@ st.subheader("Key Performance Indicators")
 col1, col2, col3 = st.columns(3)
 kpi_dict = dict(zip(df_kpi['source'], df_kpi['article_count']))
 # LABEL METRIK DIUBAH
-col1.metric("Digital Trans. & IT Enterprise", f"{kpi_dict.get('Digital Transformation & IT Enterprise', 0):,}")
+col1.metric("Digital Transformation & IT Enterprise", f"{kpi_dict.get('Digital Transformation & IT Enterprise', 0):,}")
 col2.metric("Data Center & Infrastruktur", f"{kpi_dict.get('Data Center & Infrastruktur', 0):,}")
 col3.metric("AI & Data", f"{kpi_dict.get('AI & Data', 0):,}")
 
